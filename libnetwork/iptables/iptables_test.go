@@ -210,17 +210,7 @@ func TestConcurrencyNoWait(t *testing.T) {
 // Note that if iptables does not support the xtable lock on this
 // system, then allowXlock has no effect -- it will always be off.
 func RunConcurrencyTest(t *testing.T, allowXlock bool) {
-	iptable, natChain, filterChain, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = iptable.ProgramChain(natChain, bridgeName, false, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = iptable.ProgramChain(filterChain, bridgeName, false, true)
+	_, natChain, _, err := createNewChain()
 	if err != nil {
 		t.Fatal(err)
 	}
