@@ -13,45 +13,42 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const chainName = "DOCKEREST"
-const bridgeName = "lo"
+const (
+	chainName  = "DOCKEREST"
+	bridgeName = "lo"
+)
 
-func createNewChain() (*IPTable, *ChainInfo, *ChainInfo, error) {
+func createNewChain(t *testing.T) (*IPTable, *ChainInfo, *ChainInfo) {
+	t.Helper()
 	iptable := GetIptable(IPv4)
 
 	natChain, err := iptable.NewChain(chainName, Nat, false)
 	if err != nil {
-		return nil, nil, nil, err
+		t.Fatal(err)
 	}
 	err = iptable.ProgramChain(natChain, bridgeName, false, true)
 	if err != nil {
-		return nil, nil, nil, err
+		t.Fatal(err)
 	}
 
 	filterChain, err := iptable.NewChain(chainName, Filter, false)
 	if err != nil {
-		return nil, nil, nil, err
+		t.Fatal(err)
 	}
 	err = iptable.ProgramChain(filterChain, bridgeName, false, true)
 	if err != nil {
-		return nil, nil, nil, err
+		t.Fatal(err)
 	}
 
-	return iptable, natChain, filterChain, err
+	return iptable, natChain, filterChain
 }
 
 func TestNewChain(t *testing.T) {
-	_, _, _, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	createNewChain(t)
 }
 
 func TestForward(t *testing.T) {
-	iptable, natChain, filterChain, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	iptable, natChain, filterChain := createNewChain(t)
 
 	ip := net.ParseIP("192.168.1.1")
 	port := 1234
@@ -59,7 +56,7 @@ func TestForward(t *testing.T) {
 	dstPort := 4321
 	proto := "tcp"
 
-	err = natChain.Forward(Insert, ip, port, proto, dstAddr, dstPort, bridgeName)
+	err := natChain.Forward(Insert, ip, port, proto, dstAddr, dstPort, bridgeName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,17 +101,13 @@ func TestForward(t *testing.T) {
 }
 
 func TestLink(t *testing.T) {
-	iptable, _, filterChain, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	iptable, _, filterChain := createNewChain(t)
 	ip1 := net.ParseIP("192.168.1.1")
 	ip2 := net.ParseIP("192.168.1.2")
 	port := 1234
 	proto := "tcp"
 
-	err = filterChain.Link(Append, ip1, ip2, port, proto, bridgeName)
+	err := filterChain.Link(Append, ip1, ip2, port, proto, bridgeName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,16 +140,13 @@ func TestLink(t *testing.T) {
 }
 
 func TestPrerouting(t *testing.T) {
-	iptable, natChain, _, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	iptable, natChain, _ := createNewChain(t)
 
 	args := []string{
 		"-i", "lo",
 		"-d", "192.168.1.1"}
 
-	err = natChain.Prerouting(Insert, args...)
+	err := natChain.Prerouting(Insert, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,16 +162,13 @@ func TestPrerouting(t *testing.T) {
 }
 
 func TestOutput(t *testing.T) {
-	iptable, natChain, _, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	iptable, natChain, _ := createNewChain(t)
 
 	args := []string{
 		"-o", "lo",
 		"-d", "192.168.1.1"}
 
-	err = natChain.Output(Insert, args...)
+	err := natChain.Output(Insert, args...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,10 +197,7 @@ func TestConcurrencyNoWait(t *testing.T) {
 // Note that if iptables does not support the xtable lock on this
 // system, then allowXlock has no effect -- it will always be off.
 func RunConcurrencyTest(t *testing.T, allowXlock bool) {
-	_, natChain, _, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, natChain, _ := createNewChain(t)
 
 	if !allowXlock && supportsXlock {
 		supportsXlock = false
@@ -238,10 +222,7 @@ func RunConcurrencyTest(t *testing.T, allowXlock bool) {
 }
 
 func TestCleanup(t *testing.T) {
-	iptable, _, filterChain, err := createNewChain()
-	if err != nil {
-		t.Fatal(err)
-	}
+	iptable, _, filterChain := createNewChain(t)
 
 	var rules []byte
 
@@ -251,12 +232,12 @@ func TestCleanup(t *testing.T) {
 		"-o", bridgeName,
 		"-j", filterChain.Name}
 
-	if _, err = iptable.Raw(link...); err != nil {
+	if _, err := iptable.Raw(link...); err != nil {
 		t.Fatal(err)
 	}
 	filterChain.Remove()
 
-	err = iptable.RemoveExistingChain(chainName, Nat)
+	err := iptable.RemoveExistingChain(chainName, Nat)
 	if err != nil {
 		t.Fatal(err)
 	}
